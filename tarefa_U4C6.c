@@ -7,11 +7,10 @@
 #include "hardware/timer.h"
 #include "ws2812.pio.h" 
 #include "hardware/irq.h"
-#include "hardware/uart.h"
 #include "hardware/i2c.h"
 #include "inc/ssd1306.h"
 #include "inc/font.h"
-#include "numeros.h"
+#include "numeros.h" 
 
 // -----Pinos e valores padõres------
 
@@ -39,13 +38,8 @@ static volatile uint32_t last_time = 0;
 
 // LED RGB
 const uint8_t leds_pins[] = {13, 11, 12}; // Ordem RGB
+static volatile bool state_leds[] = {false, false, false};
 
-// UART
-#define UART_ID uart0 // Seleciona a UART0
-#define BAUD_RATE 115200 // Define a taxa de transmissão
-#define UART_TX_PIN 0 // Pino GPIO usado para TX
-#define UART_RX_PIN 1 // Pino GPIO usado para RX
-static volatile char c = '0'; // Armazena o caractere de entrada
 
 // ------Funções da matriz de LEDs ws2812------
 
@@ -111,27 +105,42 @@ void gpio_irq_handler(uint gpio, uint32_t events){
     if(current_time - last_time > 200) { // Efeito de debounce gerado pelo atraso de 200 ms na leitura do botão
         last_time = current_time;
 
-        // Se o botão A foi pressionado, o estado do LED verde é alternado
+         // Se o botão A foi pressionado, o estado do LED verde é alternado
         if(!gpio_get(BUTTON_A_PIN)){
-            gpio_put(leds_pins[1], !gpio_get(leds_pins[1]));
-            printf("BUTTON A PRESSED: LED GREEN ");
+            state_leds[1] = !state_leds[1];
+            gpio_put(leds_pins[1], state_leds[1]);
+            printf("BUTTON A PRESSED: LED GREEN "); 
 
-            if(gpio_get(leds_pins[1]))
+            if (state_leds[1])
                 printf("ON\n");
-            else
+
+            else    
                 printf("OFF\n");
         }
     
-        // Se o botão B foi pressionado, o estado do LED azul é alternado
+        // Se o botão B foi pressionado, o estado do LED verde é alternado
         else if(!gpio_get(BUTTON_B_PIN)){
-            gpio_put(leds_pins[2], !gpio_get(leds_pins[2]));
-            printf("BUTTON B PRESSED: LED BLUE ");
+            state_leds[2] = !state_leds[2];
+            gpio_put(leds_pins[2], state_leds[2]);
+            printf("BUTTON B PRESSED: LED BLUE "); 
 
-            if(gpio_get(leds_pins[2]))
+            if (state_leds[2])
                 printf("ON\n");
-            else
+
+            else    
                 printf("OFF\n");
         } 
+    
+        // Atualiza o estado dos LEDs no display OLED
+        for (int i = 0; i < 3; i++){
+
+            if (state_leds[i])
+                ssd1306_draw_string(&ssd, "ON ", 20, (i + 1) * 10);
+
+            else
+                ssd1306_draw_string(&ssd, "OFF", 20, (i + 1) * 10);
+            ssd1306_send_data(&ssd);
+        }
     }
 }   
 
@@ -146,42 +155,12 @@ void init_leds(){
 }
 
 
-// ------Funções da UART------
-// Inicialização
-void initialize_uart(){
-    // Inicializa a UART
-    uart_init(UART_ID, BAUD_RATE);
-
-    // Configura os pinos GPIO para a UART
-    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART); // Configura o pino 0 para TX
-    gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART); // Configura o pino 1 para RX
-
-    uart_set_fifo_enabled(UART_ID, true);
-
-    // Configurações adicionais (opcional) 
-    uart_set_hw_flow(UART_ID, false, false); // Desabilita controle de fluxo 
-    uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE); // Configura formato (8N1) 
-}
-
-// Função de callback para ler os dados via UART 
-void on_uart_rx() { 
-    // Enquanto houver dados para ler na UART 
-    while (uart_is_readable(UART_ID)) { 
-        // Lê o caractere recebido 
-        c = uart_getc(UART_ID); 
-        // Envia o caractere de volta (echo) para verificação 
-        uart_putc(UART_ID, c); 
-    } 
-} 
-
-
 // ======== Programa principal =========
 int main()
 {
-    stdio_init_all(); // Inicializa as funcionalidades padrão de entrada e saída
+    stdio_init_all();
 
     // Inicializações
-    initialize_uart();
     initialize_i2c();
     init_buttons();
     init_leds();
@@ -204,11 +183,6 @@ int main()
     // Interrupções dos botões A e B
     gpio_set_irq_enabled_with_callback(BUTTON_A_PIN, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
     gpio_set_irq_enabled_with_callback(BUTTON_B_PIN, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-
-    // Configura a interrupção para a UART0 
-    irq_set_exclusive_handler(UART0_IRQ, on_uart_rx); // Define a função de callback para a interrupção de recepção 
-    irq_set_enabled(UART0_IRQ, true); // Habilita a interrupção na UART0 
-    uart_set_irq_enables(UART_ID, true, false); // Habilita a interrupção de recepção de dados (RX) na UART 
     
     // Mensagem padrão com o estado dos LEDs e indicação do espaço para caractere no display
     char *default_text[] = {"LEDS      CHAR",
@@ -216,37 +190,36 @@ int main()
         "G",
         "B"}; 
 
-    
+    // Desenha o estado inicial dos LEDs como OFF, no display 
+    for(int i = 1; i < 4; i++){
+        ssd1306_draw_string(&ssd, "OFF", 20, i * 10);
+        ssd1306_send_data(&ssd);
+    }
+
     while (true) { 
-    
-        //Utilizada somente para comunicação serial via USB
-        //c = getchar_timeout_us(0); // Lê o caractere sem bloquear o resto das ações
+        char c;
 
         // Escreve o estado dos leds e o espaço para receber o caractere no display
         for(int i = 0; i < count_of(default_text) ; i++){
             ssd1306_draw_string(&ssd, default_text[i], 5, i * 10);
+            ssd1306_send_data(&ssd);
+        }
 
-            if (i > 0){ // Espera chegar na linha de cada LED para escrever o estado
+        // Espera até um caracetere for lido
+        if(scanf("%c", &c) == 1){
 
-                if(gpio_get(leds_pins[i - 1]))
-                    ssd1306_draw_string(&ssd, "ON ", 20, i * 10);
-
-                else
-                    ssd1306_draw_string(&ssd, "OFF", 20, i * 10);
+            
+            if (c - '0' < 10) // Se o caractere digitado for um algarismo
+                // Desenha o número correspondente na matriz de leds
+                set_one_led(nums[c - '0'], led_r, led_g, led_b);
+                
+            // Desenha o caractere recebido
+            else{
+                ssd1306_draw_char(&ssd, c, 100, 20);
+                ssd1306_send_data(&ssd);
             }
-            
-            ssd1306_send_data(&ssd);
         }
 
-        if (c - '0' < 10) // Se o caractere digitado for um algarismo
-            // Desenha o número correspondente na matriz de leds
-            set_one_led(nums[c - '0'], led_r, led_g, led_b);
-            
-        else{
-            // Desenha a letra digitada no display OLED
-            ssd1306_draw_char(&ssd, c, 100, 20);
-            ssd1306_send_data(&ssd);
-        }
         sleep_ms(200);
     }
 }

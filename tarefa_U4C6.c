@@ -11,7 +11,7 @@
 #include "hardware/i2c.h"
 #include "inc/ssd1306.h"
 #include "inc/font.h"
-#include "numeros.h" // Biblioteca criada para os padrões numéricos de 0 a 9 no modelo da matriz 5x5
+#include "numeros.h"
 
 // -----Pinos e valores padõres------
 
@@ -19,7 +19,7 @@
 #define IS_RGBW false
 #define NUM_PIXELS 25
 #define WS2812_PIN 7
-uint8_t led_r = 10; // Intensidade do vermelho: 20
+uint8_t led_r = 20; // Intensidade do vermelho: 20
 uint8_t led_g = 0; // Intensidade do verde: 0
 uint8_t led_b = 0; // Intensidade do azul: 0
 
@@ -111,7 +111,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
     if(current_time - last_time > 200) { // Efeito de debounce gerado pelo atraso de 200 ms na leitura do botão
         last_time = current_time;
 
-        // Se o botão A foi pressionado e não foi atingido o número 9, incrementa-se o número exibido
+        // Se o botão A foi pressionado, o estado do LED verde é alternado
         if(!gpio_get(BUTTON_A_PIN)){
             gpio_put(leds_pins[1], !gpio_get(leds_pins[1]));
             printf("BUTTON A PRESSED: LED GREEN ");
@@ -122,7 +122,7 @@ void gpio_irq_handler(uint gpio, uint32_t events){
                 printf("OFF\n");
         }
     
-        // Se o botão B foi pressionado e não foi atingido o número 0, decrementa-se o número exibido
+        // Se o botão B foi pressionado, o estado do LED azul é alternado
         else if(!gpio_get(BUTTON_B_PIN)){
             gpio_put(leds_pins[2], !gpio_get(leds_pins[2]));
             printf("BUTTON B PRESSED: LED BLUE ");
@@ -163,7 +163,7 @@ void initialize_uart(){
     uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE); // Configura formato (8N1) 
 }
 
-// Função de callback que será chamada quando a interrupção ocorrer 
+// Função de callback para ler os dados via UART 
 void on_uart_rx() { 
     // Enquanto houver dados para ler na UART 
     while (uart_is_readable(UART_ID)) { 
@@ -178,7 +178,7 @@ void on_uart_rx() {
 // ======== Programa principal =========
 int main()
 {
-    stdio_init_all();
+    stdio_init_all(); // Inicializa as funcionalidades padrão de entrada e saída
 
     // Inicializações
     initialize_uart();
@@ -216,6 +216,7 @@ int main()
         "G",
         "B"}; 
 
+    
     while (true) { 
     
         //Utilizada somente para comunicação serial via USB
@@ -242,6 +243,7 @@ int main()
             set_one_led(nums[c - '0'], led_r, led_g, led_b);
             
         else{
+            // Desenha a letra digitada no display OLED
             ssd1306_draw_char(&ssd, c, 100, 20);
             ssd1306_send_data(&ssd);
         }

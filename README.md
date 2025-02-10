@@ -131,5 +131,5 @@ Exibe uma string no display OLED SSD1306. Essa função permite atualizar a tela
 A partir de agora, você pode interagir com os LEDs RGB através dos botões, e visualizar os caracteres recebidos via UART-USB no display OLED e números na matriz de LEDs.
 
 ## Vídeo de demonstração
-Link do vídeo no youtube:
+Link do vídeo no Youtube:https://youtube.com/shorts/NUFzkd_RD8E?feature=share
 
